@@ -323,6 +323,9 @@ const ReversiGame = () => {
       calculateScores(data.board);
       fetchValidMoves(data.board, 1);
     });
+    socket.on('join_failed', (data) => {
+      alert("Join Failed: " + data.message);
+    });
 
     socket.on('game_state_update', (data) => {
       setBoard(data.board);
@@ -367,13 +370,7 @@ const ReversiGame = () => {
 
 
   // FIX: This useEffect now explicitly watches 'isOnlineReady' to fetch games immediately upon connection
-  useEffect(() => {
-    if (gameState === 'online_lobby' && isOnlineReady && socket) {
-      console.log("Fetching open games...");
-      socket.emit('get_open_games');
-    }
-  }, [gameState, isOnlineReady]);
-
+  
 
   // AI vs AI loop
   useEffect(() => {
@@ -391,7 +388,16 @@ const ReversiGame = () => {
     if (!board || !board[row]) return null;
     const cell = board[row][col];
     const isValid = validMoves.some(m => m.row === row && m.col === col);
-    const isTopMove = topMoves.some(m => m.move.row === row && m.move.col === col);
+    const isTopMove = touseEffect(() => {
+    if (gameState === 'online_lobby' && isOnlineReady && socket) {
+
+        // FIX 3: Clear stale data
+        setOpenGames([]);
+
+        console.log("Fetching open games...");
+        socket.emit('get_open_games');
+    }
+}, [gameState, isOnlineReady]);pMoves.some(m => m.move.row === row && m.move.col === col);
     const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
     const isCurrentPlayerHumanControlled = 
       gameMode === 'hvh' || 
@@ -435,8 +441,13 @@ const ReversiGame = () => {
   // 1. Online Lobby Screen
   if (gameState === 'online_lobby') {
     const fetchOpenGames = () => {
-      if(socket) socket.emit('get_open_games');
-    };
+    if (socket && isOnlineReady) {
+        console.log("Manual refresh → requesting open games");
+        socket.emit('get_open_games');
+    } else {
+        console.log("Refresh requested but socket not ready");
+    }
+};
      
     // ----------------------------
     const createGame = () => {
