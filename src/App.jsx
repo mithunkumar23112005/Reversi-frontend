@@ -406,17 +406,10 @@ useEffect(() => {
     if (!board || !board[row]) return null;
     const cell = board[row][col];
     const isValid = validMoves.some(m => m.row === row && m.col === col);
-    const isTopMove = touseEffect(() => {
-    if (gameState === 'online_lobby' && isOnlineReady && socket) {
+    cons isTopMove = touseEffect(() => {
+    const isTopMove = topMoves.some(m => m.move.row === row && m.move.col === col);
+const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
 
-        // FIX 3: Clear stale data
-        setOpenGames([]);
-
-        console.log("Fetching open games...");
-        socket.emit('get_open_games');
-    }
-}, [gameState, isOnlineReady]);pMoves.some(m => m.move.row === row && m.move.col === col);
-    const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
     const isCurrentPlayerHumanControlled = 
       gameMode === 'hvh' || 
       (gameMode === 'hvai' && currentPlayer === 1) ||
