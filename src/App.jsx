@@ -437,7 +437,13 @@ const ReversiGame = () => {
     const fetchOpenGames = () => {
       if(socket) socket.emit('get_open_games');
     };
-    
+     useEffect(() => {
+      // Fetch games immediately when entering the lobby AND the socket is ready
+      if (isOnlineReady && socket) {
+        fetchOpenGames();
+      }
+    }, [isOnlineReady]);
+    // ----------------------------
     const createGame = () => {
       if (socket) socket.emit('create_game', { board_size: boardSize });
     };
