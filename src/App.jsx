@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users, Brain, RotateCcw, TrendingUp, Zap, Target, Cpu, Clock, Activity, Lightbulb, Play, Network, LogOut, Loader, Plus, List, AlertTriangle, Search, Gamepad2 } from 'lucide-react';
 import io from 'socket.io-client';
+import logo from "./logo.png";
+
 
 const API_URL = 'https://reversi-djpc.onrender.com';
 const SOCKET_URL = 'https://reversi-djpc.onrender.com';
