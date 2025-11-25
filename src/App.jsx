@@ -406,7 +406,7 @@ useEffect(() => {
     if (!board || !board[row]) return null;
     const cell = board[row][col];
     const isValid = validMoves.some(m => m.row === row && m.col === col);
-    cons isTopMove = touseEffect(() => {
+  
     const isTopMove = topMoves.some(m => m.move.row === row && m.move.col === col);
 const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
 
