@@ -378,6 +378,16 @@ const ReversiGame = () => {
 
 
   // FIX: This useEffect now explicitly watches 'isOnlineReady' to fetch games immediately upon connection
+  // --- FIX: Correct useEffect to fetch open games when entering the lobby ---
+useEffect(() => {
+    if (gameState === 'online_lobby' && isOnlineReady && socket) {
+        // Clear stale data
+        setOpenGames([]);
+        console.log("FIXED: Fetching open games on lobby enter...");
+        socket.emit('get_open_games');
+    }
+}, [gameState, isOnlineReady]); 
+// -------------------------------------------------------------------------
   
 
   // AI vs AI loop
