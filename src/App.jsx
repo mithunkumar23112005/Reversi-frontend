@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Brain, RotateCcw, TrendingUp, Zap, Target, Cpu, Clock, Activity, Lightbulb, Play, Network, LogOut, Loader, Plus, List, AlertTriangle, Search } from 'lucide-react';
+import { Users, Brain, RotateCcw, TrendingUp, Zap, Target, Cpu, Clock, Activity, Lightbulb, Play, Network, LogOut, Loader, Plus, List, AlertTriangle, Search, Gamepad2 } from 'lucide-react';
 import io from 'socket.io-client';
-import BoardEditor from './components/BoardEditor.jsx'; 
 
 const API_URL = 'https://reversi-djpc.onrender.com';
 const SOCKET_URL = 'https://reversi-djpc.onrender.com';
 
 let socket;
+
+// --- Placeholder for BoardEditor since the file is missing ---
+const BoardEditor = ({ initialSize, apiUrl }) => {
+  return (
+    <div className="flex flex-col items-center justify-center p-12 bg-gray-800 rounded-xl border-2 border-dashed border-gray-600 text-center">
+      <Brain size={64} className="text-purple-500 mb-4" />
+      <h2 className="text-2xl font-bold text-white mb-2">Board Editor</h2>
+      <p className="text-gray-400">The Board Editor component is currently unavailable in this preview.</p>
+      <p className="text-sm text-gray-500 mt-2">(Add src/components/BoardEditor.jsx to enable)</p>
+    </div>
+  );
+};
 
 const ReversiGame = () => {
   const [gameState, setGameState] = useState('menu');
@@ -43,7 +54,9 @@ const ReversiGame = () => {
   const [openGames, setOpenGames] = useState([]);
   const [socketId, setSocketId] = useState(null);
   const [manualGameId, setManualGameId] = useState(''); 
-
+  
+  // 🔥 CRITICAL FIX: Ref to track color immediately (avoids stale state bugs)
+  const playerColorRef = useRef(onlinePlayerColor);
 
   // --- Game Logic Wrappers ---
 
@@ -224,8 +237,16 @@ const ReversiGame = () => {
     }
   };
 
+  // --- GET HINT (Unlimited, All Modes) ---
   const getAIHint = async () => {
-    if (!board || board.length === 0 || thinking || (gameMode !== 'hvai' && gameMode !== 'hvh')) return;
+    if (!board || board.length === 0 || thinking) return;
+    
+    // Toggle off if already shown
+    if (showHint) {
+        setShowHint(false);
+        return;
+    }
+
     setThinking(true);
     setShowStats(true);
     try {
@@ -235,7 +256,7 @@ const ReversiGame = () => {
         body: JSON.stringify({
           board: board,
           player: currentPlayer, 
-          difficulty: difficulty,
+          difficulty: 'expert',
           session_id: sessionId
         })
       });
@@ -277,200 +298,197 @@ const ReversiGame = () => {
       }, 1000);
     } 
   };
-useEffect(() => {
-    playerColorRef.current = onlinePlayerColor;
-}, [onlinePlayerColor]);
 
-useEffect(() => {
-  socket = io(SOCKET_URL, {
-    path: "/socket.io/",
-    transports: ["websocket", "polling"],
-    upgrade: true,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    timeout: 20000
-  });
+  // --- SOCKET IO SETUP & REF SYNC ---
 
-  socket.on('connect', () => {
-    console.log("✅ Connected to WebSocket");
-    setIsOnlineReady(true);
-  });
+  // 1. Keep Ref in sync with state
+  useEffect(() => {
+      playerColorRef.current = onlinePlayerColor;
+  }, [onlinePlayerColor]);
 
-  socket.on('session_ready', (data) => {
-    setSocketId(data.sid);
-  });
-
-  socket.on('disconnect', () => {
-    console.log("❌ Disconnected from WebSocket");
-    setIsOnlineReady(false);
-  });
-
-  socket.on('error', (data) => {
-    console.error("Socket Error:", data);
-    alert(`Server Error: ${data.message || 'Unknown error'}`);
-  });
-
-  socket.on('game_created', (data) => {
-    setOnlineGameId(data.game_id);
-    setOnlinePlayerColor(data.player_color);
-    setOnlineStatus('waiting');
-    setBoardSize(data.board_size);
-    setGameState('online_playing');
-
-    // Initialize board
-    fetch(`${API_URL}/api/init`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ board_size: data.board_size, session_id: sessionId })
-    }).then(res => res.json()).then(initData => {
-      if (initData.success) {
-        setBoard(initData.board);
-        // Calculate scores
-        let black = 0, white = 0;
-        initData.board.forEach(row => {
-          row.forEach(cell => {
-            if (cell === 1) black++;
-            if (cell === 2) white++;
-          });
-        });
-        setScores({ black, white });
-      }
+  // 2. Main Socket Logic
+  useEffect(() => {
+    socket = io(SOCKET_URL, {
+      path: "/socket.io/",
+      transports: ["websocket", "polling"],
+      upgrade: true,
+      reconnection: true,
+      timeout: 20000
     });
-  });
 
-  socket.on('game_joined', (data) => {
-    setOnlineGameId(data.game_id);
-    setOnlinePlayerColor(data.player_color);
-    setOnlineStatus('playing');
-    setBoardSize(data.board_size);
-    setBoard(data.board);
-    setCurrentPlayer(1);
-    setGameState('online_playing');
-
-    // Calculate scores
-    let black = 0, white = 0;
-    data.board.forEach(row => {
-      row.forEach(cell => {
-        if (cell === 1) black++;
-        if (cell === 2) white++;
-      });
+    socket.on('connect', () => {
+      console.log("✅ Connected to WebSocket");
+      setIsOnlineReady(true);
     });
-    setScores({ black, white });
 
-    // 🔥 FIX: Check if I am Player 1. If so, fetch moves immediately.
-    // We use data.player_color because state update might not be finished yet.
-    if (data.player_color === 1) {
-      fetch(`${API_URL}/api/valid_moves`, {
+    socket.on('session_ready', (data) => {
+      setSocketId(data.sid);
+    });
+
+    socket.on('disconnect', () => {
+      console.log("❌ Disconnected from WebSocket");
+      setIsOnlineReady(false);
+    });
+
+    socket.on('error', (data) => {
+      console.error("Socket Error:", data);
+      alert(`Server Error: ${data.message || 'Unknown error'}`);
+    });
+
+    socket.on('game_created', (data) => {
+      setOnlineGameId(data.game_id);
+      setOnlinePlayerColor(data.player_color);
+      playerColorRef.current = data.player_color; // 🔥 Force update ref immediately
+      setOnlineStatus('waiting');
+      setBoardSize(data.board_size);
+      setGameState('online_playing');
+
+      fetch(`${API_URL}/api/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ board: data.board, player: 1, session_id: sessionId })
-      }).then(res => res.json()).then(movesData => {
-        if (movesData.success) setValidMoves(movesData.moves);
-      });
-    } else {
-      setValidMoves([]); // If I am player 2, I wait.
-    }
-  });
-
-  socket.on('join_failed', (data) => {
-    alert("❌ Join Failed: " + data.message);
-  });
-
-  socket.on('game_state_update', (data) => {
-    setBoard(data.board);
-    setCurrentPlayer(data.turn);
-    setOnlineStatus(data.status);
-
-    // Calculate scores
-    let black = 0, white = 0;
-    data.board.forEach(row => {
-      row.forEach(cell => {
-        if (cell === 1) black++;
-        if (cell === 2) white++;
+        body: JSON.stringify({ board_size: data.board_size, session_id: sessionId })
+      }).then(res => res.json()).then(initData => {
+        if (initData.success) {
+          setBoard(initData.board);
+          let black = 0, white = 0;
+          initData.board.forEach(row => {
+            row.forEach(cell => {
+              if (cell === 1) black++;
+              if (cell === 2) white++;
+            });
+          });
+          setScores({ black, white });
+        }
       });
     });
-    setScores({ black, white });
 
-    if (data.message && data.message.startsWith('Player')) {
-      setMoveHistory(prev => [...prev, { player: 3 - data.turn, message: data.message }]);
-    }
+    socket.on('game_joined', (data) => {
+      setOnlineGameId(data.game_id);
+      setOnlinePlayerColor(data.player_color);
+      playerColorRef.current = data.player_color; // 🔥 Force update ref immediately
+      setOnlineStatus('playing');
+      setBoardSize(data.board_size);
+      setBoard(data.board);
+      setCurrentPlayer(1);
+      setGameState('online_playing');
 
-    if (data.status === 'finished') {
-      setGameOver(true);
-      const winnerName = data.winner === 1 ? 'Black' : data.winner === 2 ? 'White' : 'Draw';
-      setWinner(winnerName);
-    } else {
-      // 🔥 FIX: Use the REF to get the LIVE color value
-      const myLiveColor = playerColorRef.current;
-      
-      console.log(`Turn: ${data.turn}, My Color: ${myLiveColor}`); // Debug log
+      // Calculate scores
+      let black = 0, white = 0;
+      data.board.forEach(row => {
+        row.forEach(cell => {
+          if (cell === 1) black++;
+          if (cell === 2) white++;
+        });
+      });
+      setScores({ black, white });
 
-      if (data.turn === myLiveColor) {
+      // Check if it's my turn (Player 1 Black starts)
+      if (data.player_color === 1) {
         fetch(`${API_URL}/api/valid_moves`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ board: data.board, player: data.turn, session_id: sessionId })
+          body: JSON.stringify({ board: data.board, player: 1, session_id: sessionId })
         }).then(res => res.json()).then(movesData => {
           if (movesData.success) setValidMoves(movesData.moves);
         });
       } else {
-        setValidMoves([]);
+        setValidMoves([]); 
       }
-    }
-  });
+    });
 
-  socket.on('opponent_left', (data) => {
-    setOnlineStatus('disconnected');
-    setGameOver(true);
-    alert(`Opponent Left: ${data.message}`);
-  });
+    socket.on('join_failed', (data) => {
+      alert("❌ Join Failed: " + data.message);
+    });
 
-  socket.on('move_error', (data) => {
-    alert(`Move Error: ${data.message}`);
-  });
+    socket.on('game_state_update', (data) => {
+      setBoard(data.board);
+      setCurrentPlayer(data.turn);
+      setOnlineStatus(data.status);
 
-  socket.on('open_games_list', (data) => {
-    console.log("📋 Games list received:", data.games);
-    setOpenGames(data.games);
-  });
+      // Calculate scores
+      let black = 0, white = 0;
+      data.board.forEach(row => {
+        row.forEach(cell => {
+          if (cell === 1) black++;
+          if (cell === 2) white++;
+        });
+      });
+      setScores({ black, white });
 
-  return () => {
-    if (socket) {
-      socket.removeAllListeners();
-      socket.disconnect();
-    }
-  };
-}, []); // Keep empty dependency array// ✅ EMPTY DEPENDENCY ARRAY
+      if (data.message && data.message.startsWith('Player')) {
+        setMoveHistory(prev => [...prev, { player: 3 - data.turn, message: data.message }]);
+      }
 
+      if (data.status === 'finished') {
+        setGameOver(true);
+        const winnerName = data.winner === 1 ? 'Black' : data.winner === 2 ? 'White' : 'Draw';
+        setWinner(winnerName);
+      } else {
+        // 🔥 CRITICAL FIX: Use the REF to get the LIVE color value safely
+        const myLiveColor = Number(playerColorRef.current);
+        const currentTurn = Number(data.turn);
+        
+        console.log(`Turn Update -> Game Turn: ${currentTurn}, My Color: ${myLiveColor}`); 
 
-  // FIX: This useEffect now explicitly watches 'isOnlineReady' to fetch games immediately upon connection
-  // --- FIX: Correct useEffect to fetch open games when entering the lobby ---
-useEffect(() => {
+        if (currentTurn === myLiveColor) {
+          fetch(`${API_URL}/api/valid_moves`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ board: data.board, player: currentTurn, session_id: sessionId })
+          }).then(res => res.json()).then(movesData => {
+            if (movesData.success) {
+                setValidMoves(movesData.moves);
+            }
+          });
+        } else {
+          setValidMoves([]);
+        }
+      }
+    });
+
+    socket.on('opponent_left', (data) => {
+      setOnlineStatus('disconnected');
+      setGameOver(true);
+      alert(`Opponent Left: ${data.message}`);
+    });
+
+    socket.on('move_error', (data) => {
+      alert(`Move Error: ${data.message}`);
+    });
+
+    socket.on('open_games_list', (data) => {
+      console.log("📋 Games list received:", data.games);
+      setOpenGames(data.games);
+    });
+
+    return () => {
+      if (socket) {
+        socket.removeAllListeners();
+        socket.disconnect();
+      }
+    };
+  }, []); 
+
+  // Fetch games on lobby enter
+  useEffect(() => {
     if (gameState === 'online_lobby' && isOnlineReady && socket) {
-        // Clear stale data
         setOpenGames([]);
-        console.log("FIXED: Fetching open games on lobby enter...");
         socket.emit('get_open_games');
     }
-}, [gameState, isOnlineReady]); 
-// -------------------------------------------------------------------------
+  }, [gameState, isOnlineReady]); 
+
+  // Periodic refresh for lobby
   useEffect(() => {
   if (gameState === 'online_lobby' && socket) {
-    // Wait a bit for socket to be fully ready
     const fetchWithRetry = () => {
       if (socket.connected) {
-        console.log("🔍 Fetching open games...");
         socket.emit('get_open_games');
       } else {
-        console.log("⏳ Socket not connected yet, waiting...");
         setTimeout(fetchWithRetry, 500);
       }
     };
-    
     fetchWithRetry();
     
-    // Set up periodic refresh every 5 seconds
     const interval = setInterval(() => {
       if (socket && socket.connected) {
         socket.emit('get_open_games');
@@ -479,7 +497,7 @@ useEffect(() => {
     
     return () => clearInterval(interval);
   }
-}, [gameState]);
+  }, [gameState]);
 
   // AI vs AI loop
   useEffect(() => {
@@ -499,7 +517,7 @@ useEffect(() => {
     const isValid = validMoves.some(m => m.row === row && m.col === col);
   
     const isTopMove = topMoves.some(m => m.move.row === row && m.move.col === col);
-const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
+    const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
 
     const isCurrentPlayerHumanControlled = 
       gameMode === 'hvh' || 
@@ -543,34 +561,23 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
   // 1. Online Lobby Screen
   if (gameState === 'online_lobby') {
     const fetchOpenGames = () => {
-    if (socket && isOnlineReady) {
-        console.log("Manual refresh → requesting open games");
-        socket.emit('get_open_games');
-    } else {
-        console.log("Refresh requested but socket not ready");
-    }
-};
+        if (socket && isOnlineReady) socket.emit('get_open_games');
+    };
      
-    // ----------------------------
     const createGame = () => {
       if (socket) socket.emit('create_game', { board_size: boardSize });
     };
 
-    // FIX: Enhanced Join Game Logic with Debugging
     const joinGame = (id) => {
       const cleanId = id.trim();
-      console.log("Attempting to join game:", cleanId);
-      
       if (!isOnlineReady) {
         alert("⚠️ You are not connected to the server. Please wait for the green 'Connected' status.");
         return;
       }
-      
       if (!cleanId) {
         alert("⚠️ Please enter a Game ID.");
         return;
       }
-
       if (socket) {
         socket.emit('join_game', { game_id: cleanId });
       } else {
@@ -593,7 +600,6 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
             </button>
             </div>
           
-          {/* Lobby Status */}
           <div className="flex justify-between items-center p-4 bg-gray-700 rounded-lg mb-6 text-white">
             <p className="flex items-center gap-2">
               <Play size={20} /> Current Board Size: 
@@ -622,33 +628,31 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
 
             {/* Join by ID Side */}
             <div className="bg-gray-700/50 p-6 rounded-xl border border-gray-600">
-  <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-    <Search size={24} className="text-blue-400" /> Join Specific Game
-  </h3>
-  <p className="text-gray-400 mb-4 text-sm">Have a friend's Game ID? Enter it here.</p>
-  
-  <input 
-    type="text" 
-    value={manualGameId}
-    onChange={(e) => setManualGameId(e.target.value)}
-    onKeyPress={(e) => {
-      if (e.key === 'Enter' && manualGameId) {
-        joinGame(manualGameId);
-      }
-    }}
-    placeholder="Enter Game ID..." 
-    className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2 mb-3 focus:outline-none focus:border-blue-500"
-  />
-  
-  <button 
-    onClick={() => joinGame(manualGameId)}
-    disabled={!isOnlineReady || !manualGameId}
-    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold px-4 py-3 rounded-lg transition-all flex items-center justify-center gap-2"
-  >
-    <Network size={18} />
-    Join Game
-  </button>
-</div>
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Search size={24} className="text-blue-400" /> Join Specific Game
+              </h3>
+              <p className="text-gray-400 mb-4 text-sm">Have a friend's Game ID? Enter it here.</p>
+              <input 
+                type="text" 
+                value={manualGameId}
+                onChange={(e) => setManualGameId(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && manualGameId) {
+                    joinGame(manualGameId);
+                  }
+                }}
+                placeholder="Enter Game ID..." 
+                className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2 mb-3 focus:outline-none focus:border-blue-500"
+              />
+              <button 
+                onClick={() => joinGame(manualGameId)}
+                disabled={!isOnlineReady || !manualGameId}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold px-4 py-3 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Network size={18} />
+                Join Game
+              </button>
+            </div>
           </div>
 
           {/* Open Games List */}
@@ -725,6 +729,14 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full border-2 border-green-600">
+          
+          {/* Replaced Logo Image with Gamepad Icon since image is missing in this env */}
+          <div className="flex justify-center mb-4">
+            <div className="w-32 h-32 rounded-full bg-gray-800 border-4 border-green-500 flex items-center justify-center shadow-[0_0_15px_rgba(74,222,128,0.5)]">
+                <Gamepad2 size={64} className="text-green-400" />
+            </div>
+          </div>
+
           <h1 className="text-5xl font-bold text-center mb-2 text-green-400">🎮 Advanced Reversi AI</h1>
           <p className="text-center text-gray-400 mb-8">Minimax + Alpha-Beta Pruning | Transposition Tables | Iterative Deepening</p>
           <div className="space-y-4 mb-8">
@@ -805,9 +817,28 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
             <h1 className="text-2xl font-bold text-green-400">{gameMode === 'hvai' ? '👤 Human vs AI' : gameMode === 'hvh' ? '👥 Local Human vs Human' : gameMode === 'online' ? `🌐 Online HvH: ${onlineGameId}` : gameMode === 'aivai' ? '🤖 AI vs AI' : 'Game'}</h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {((gameMode === 'hvai' && currentPlayer === 1) || gameMode === 'hvh') && !gameOver && (
-              <button onClick={getAIHint} disabled={thinking} className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2"><Lightbulb size={18} /> Get Hint</button>
+            
+            {/* --- UPDATED: Unlimited Hint Button with Bulb Icon (Visible in HvH, HvAI, Online) --- */}
+            {!gameOver && (
+              (gameMode === 'hvh') || 
+              (gameMode === 'hvai' && currentPlayer === 1) || 
+              (gameMode === 'online' && currentPlayer === onlinePlayerColor)
+            ) && (
+              <button 
+                onClick={getAIHint} 
+                disabled={thinking} 
+                className={`
+                  p-2 rounded-lg transition-all flex items-center gap-2 border-2
+                  ${showHint 
+                    ? 'bg-yellow-500/20 border-yellow-400 text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
+                    : 'bg-gray-700 border-gray-600 text-gray-300 hover:text-white hover:border-gray-500'}
+                `}
+                title="Get AI Best Move Hint"
+              >
+                <Lightbulb size={24} fill={showHint ? "currentColor" : "none"} /> 
+              </button>
             )}
+
             <button onClick={() => initializeGame(boardSize, gameMode)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2"><RotateCcw size={18} /> Reset</button>
             {(gameMode === 'hvai' || gameMode === 'aivai') && (
               <button onClick={() => setShowStats(!showStats)} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2"><TrendingUp size={18} /> Stats</button>
@@ -830,7 +861,8 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
               ) : (
                 <div className="text-center text-white p-8"><div className="animate-spin text-4xl mb-4">⏳</div><p>Loading board...</p></div>
               )}
-              {/* Scores Display - Works for Online, HvAI, and Local */}
+              
+              {/* Scores Display - Works for Online, HvAI, and Local HvH */}
               {board.length > 0 && (
                 <div className="mt-6 flex justify-between items-stretch gap-4">
                   
@@ -852,7 +884,11 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
                     </span>
                     {currentPlayer === 1 && (
                       <span className="text-xs font-bold text-green-400 animate-pulse bg-green-400/10 px-2 py-1 rounded-full">
-                        {gameMode === 'online' && onlinePlayerColor !== 1 ? 'OPPONENT TURN' : 'YOUR TURN'}
+                        {gameMode === 'online' && onlinePlayerColor !== 1 
+                          ? 'OPPONENT TURN' 
+                          : gameMode === 'hvh' 
+                            ? 'PLAYER 1 TURN' 
+                            : 'YOUR TURN'}
                       </span>
                     )}
                   </div>
@@ -880,13 +916,29 @@ const isHint = showHint && aiHint && aiHint.row === row && aiHint.col === col;
                     </span>
                     {currentPlayer === 2 && (
                       <span className="text-xs font-bold text-white animate-pulse bg-white/10 px-2 py-1 rounded-full">
-                         {gameMode === 'online' && onlinePlayerColor !== 2 ? 'OPPONENT TURN' : (gameMode === 'hvai' ? 'AI THINKING...' : 'YOUR TURN')}
+                         {gameMode === 'online' && onlinePlayerColor !== 2 
+                           ? 'OPPONENT TURN' 
+                           : gameMode === 'hvai' 
+                             ? 'AI THINKING...' 
+                             : gameMode === 'hvh'
+                               ? 'PLAYER 2 TURN'
+                               : 'YOUR TURN'}
                       </span>
                     )}
                   </div>
 
                 </div>
               )}
+
+              {/* Debugging Info for Online Mode */}
+              {gameMode === 'online' && (
+                <div className="mt-4 p-3 bg-gray-900/80 rounded border border-gray-700 text-xs text-gray-400 font-mono text-center">
+                   <span className="text-yellow-400 font-bold">DEBUG:</span> My Color: {onlinePlayerColor} ({onlinePlayerColor===1?'Black':'White'}) | 
+                   Current Turn: {currentPlayer} | 
+                   Moves Available: {validMoves.length}
+                </div>
+              )}
+
             </div>
           </div>
           <div className="space-y-4">
