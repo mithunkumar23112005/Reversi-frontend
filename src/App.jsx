@@ -730,12 +730,15 @@ const ReversiGame = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full border-2 border-green-600">
           
-          {/* Replaced Logo Image with Gamepad Icon since image is missing in this env */}
           <div className="flex justify-center mb-4">
-            <div className="w-32 h-32 rounded-full bg-gray-800 border-4 border-green-500 flex items-center justify-center shadow-[0_0_15px_rgba(74,222,128,0.5)]">
-                <Gamepad2 size={64} className="text-green-400" />
-            </div>
-          </div>
+  <div className="w-32 h-32 rounded-full bg-gray-800 border-4 border-green-500 flex items-center justify-center shadow-[0_0_15px_rgba(74,222,128,0.5)]">
+    <img 
+      src={logo} 
+      alt="Logo"
+      className="w-24 h-24 object-contain rounded-full"
+    />
+  </div>
+</div>
 
           <h1 className="text-5xl font-bold text-center mb-2 text-green-400">🎮 Advanced Reversi AI</h1>
           <p className="text-center text-gray-400 mb-8">Minimax + Alpha-Beta Pruning | Transposition Tables | Iterative Deepening</p>
