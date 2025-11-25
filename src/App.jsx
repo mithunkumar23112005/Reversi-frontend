@@ -281,7 +281,15 @@ const ReversiGame = () => {
 
   // --- SocketIO Implementation ---
   useEffect(() => {
-    socket = io(SOCKET_URL);
+    socket = io(SOCKET_URL, {
+      path: "/socket.io/",
+      transports: ["websocket", "polling"],
+      upgrade: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 20000
+    });
     
     socket.on('connect', () => {
       console.log("Connected to WebSocket");
