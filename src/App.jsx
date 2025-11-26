@@ -122,11 +122,11 @@ const ReversiGame = () => {
           ttHits: data.stats.tt_hits
         });
         calculateScores(newBoard);
-        setMoveHistory(prev => [...prev, { 
-          player, 
-          row: data.move.row, 
-          col: data.move.col 
-        }]);
+        setMoveHistory(prev => [...prev, {
+    player,
+    to: { row: data.move.row, col: data.move.col },
+    flipped: data.move.flipped || []
+  }]);
         setTimeout(() => {
           setThinking(false);
           checkGameOver(newBoard, player); 
@@ -204,42 +204,56 @@ const ReversiGame = () => {
   }, [calculateScores, fetchValidMoves, sessionId]);
     
   const makeHumanMove = async (row, col) => {
-    if (thinking || gameOver) return;
-    const move = validMoves.find(m => m.row === row && m.col === col);
-    if (!move) return;
+  if (thinking || gameOver) return;
+  const move = validMoves.find(m => m.row === row && m.col === col);
+  if (!move) return;
 
-    setShowHint(false);
-    setAiHint(null);
+  setShowHint(false);
+  setAiHint(null);
 
-    if (gameMode === 'online' && onlineGameId && socket) {
-      socket.emit('make_online_move', { row, col });
-      return; 
-    }
+  // ONLINE MOVE → use socket
+  if (gameMode === 'online' && onlineGameId && socket) {
+    socket.emit('make_online_move', { row, col });
+    return;
+  }
 
-    try {
-      const res = await fetch(`${API_URL}/api/make_move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          board: board,
-          row,
-          col,
+  try {
+    const res = await fetch(`${API_URL}/api/make_move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        board: board,
+        row,
+        col,
+        player: currentPlayer,
+        session_id: sessionId
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const newBoard = data.board;
+
+      setBoard(newBoard);
+      calculateScores(newBoard);
+
+      // ✅ UPDATED MOVE HISTORY (HvH + HvAI)
+      setMoveHistory(prev => [
+        ...prev,
+        {
           player: currentPlayer,
-          session_id: sessionId
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        const newBoard = data.board;
-        setBoard(newBoard);
-        calculateScores(newBoard);
-        setMoveHistory(prev => [...prev, { player: currentPlayer, row, col }]);
-        await checkGameOver(newBoard, currentPlayer); 
-      }
-    } catch (error) {
-      console.error('Error making move:', error);
+          to: { row, col },
+          flipped: data.flipped || []
+        }
+      ]);
+
+      await checkGameOver(newBoard, currentPlayer);
     }
-  };
+  } catch (error) {
+    console.error('Error making move:', error);
+  }
+};
+
 
   // --- GET HINT (Unlimited, All Modes) ---
   const getAIHint = async () => {
@@ -275,7 +289,6 @@ const ReversiGame = () => {
     });
 
     const data = await response.json();
-
     if (data.success) {
       setAiHint(data.move);
       setShowHint(true);
@@ -435,9 +448,19 @@ const ReversiGame = () => {
       });
       setScores({ black, white });
 
-      if (data.message && data.message.startsWith('Player')) {
-        setMoveHistory(prev => [...prev, { player: 3 - data.turn, message: data.message }]);
-      }
+      if (data.move) {
+  const { player, row, col, flipped } = data.move;
+
+  setMoveHistory(prev => [
+    ...prev,
+    {
+      player,
+      to: { row, col },
+      flipped: flipped || [],
+      message: `Player ${player} moved to (${row},${col})`
+    }
+  ]);
+}
 
       if (data.status === 'finished') {
         setGameOver(true);
@@ -972,7 +995,21 @@ const ReversiGame = () => {
             {(gameMode === 'hvai' || gameMode === 'aivai') && showStats && (
               <div className="bg-gray-800 rounded-xl p-6 border-2 border-purple-600"><h3 className="text-xl font-bold text-purple-400 mb-4 flex items-center gap-2"><Activity size={24} /> Performance</h3><div className="space-y-3"><div className="bg-gray-700 p-3 rounded-lg"><div className="text-sm text-gray-400">Nodes Explored</div><div className="text-2xl font-bold text-white">{stats.nodesExplored.toLocaleString()}</div></div><div className="bg-gray-700 p-3 rounded-lg"><div className="text-sm text-gray-400">Time Taken</div><div className="text-2xl font-bold text-white">{stats.timeMs}ms</div></div><div className="bg-gray-700 p-3 rounded-lg"><div className="text-sm text-gray-400">Depth Reached</div><div className="text-2xl font-bold text-white">{stats.depthReached}</div></div><div className="bg-gray-700 p-3 rounded-lg"><div className="text-sm text-gray-400">Pruning Rate</div><div className="text-2xl font-bold text-green-400">{stats.pruningRate}%</div></div></div></div>
             )}
-            <div className="bg-gray-800 rounded-xl p-6 border-2 border-blue-600 max-h-96 overflow-y-auto"><h3 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2"><Clock size={24} /> Move History ({moveHistory.length})</h3><div className="space-y-2">{moveHistory.length > 0 ? (moveHistory.slice().reverse().map((move, idx) => (<div key={idx} className="bg-gray-700 p-2 rounded text-sm text-white flex items-center gap-2"><div className={`w-4 h-4 rounded-full ${move.player === 1 ? 'bg-gray-900' : 'bg-white'}`} /><span>{move.message || `Move ${moveHistory.length - idx}: Row ${move.row}, Col ${move.col}`}</span></div>))) : (<div className="text-gray-400 text-center py-4">No moves yet</div>)}</div></div>
+            <div className="bg-gray-800 rounded-xl p-6 border-2 border-blue-600 max-h-96 overflow-y-auto"><h3 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2"><Clock size={24} /> Move History ({moveHistory.length})</h3><div className="space-y-2">{moveHistory.length > 0 ? (moveHistory.slice().reverse().map((move, idx) => (<div key={idx} className="bg-gray-700 p-2 rounded text-sm text-white flex flex-col gap-1">
+  <div className="flex items-center gap-2">
+    <div className={`w-4 h-4 rounded-full ${move.player === 1 ? 'bg-gray-900' : 'bg-white'}`} />
+    <span>
+      Player {move.player} moved to ({move?.to?.row}, {move?.to?.col})
+    </span>
+  </div>
+
+  {move.flipped?.length > 0 && (
+    <span className="text-xs text-yellow-300 ml-6">
+      Flipped → {move.flipped.map(f => `(${f[0]},${f[1]})`).join(", ")}
+    </span>
+  )}
+</div>
+))) : (<div className="text-gray-400 text-center py-4">No moves yet</div>)}</div></div>
           </div>
         </div>
       </div>
