@@ -8,17 +8,8 @@ const API_URL = 'https://reversi-kb0q.onrender.com';
 const SOCKET_URL = 'https://reversi-kb0q.onrender.com';
 let socket;
 
-// --- Placeholder for BoardEditor since the file is missing ---
-const BoardEditor = ({ initialSize, apiUrl }) => {
-  return (
-    <div className="flex flex-col items-center justify-center p-12 bg-gray-800 rounded-xl border-2 border-dashed border-gray-600 text-center">
-      <Brain size={64} className="text-purple-500 mb-4" />
-      <h2 className="text-2xl font-bold text-white mb-2">Board Editor</h2>
-      <p className="text-gray-400">The Board Editor component is currently unavailable in this preview.</p>
-      <p className="text-sm text-gray-500 mt-2">(Add src/components/BoardEditor.jsx to enable)</p>
-    </div>
-  );
-};
+import BoardEditor from "./components/BoardEditor";
+
 
 const ReversiGame = () => {
   const [gameState, setGameState] = useState('menu');
