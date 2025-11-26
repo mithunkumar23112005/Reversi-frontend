@@ -4,8 +4,8 @@ import io from 'socket.io-client';
 import logo from "./logo.png";
 
 
-const API_URL = 'https://reversi-kb0q.onrender.com';
-const SOCKET_URL = 'https://reversi-kb0q.onrender.com';
+const API_URL = 'https://reversi-djpc.onrender.com';
+const SOCKET_URL = 'https://reversi-djpc.onrender.com';
 
 let socket;
 
@@ -258,7 +258,7 @@ const ReversiGame = () => {
         body: JSON.stringify({
           board: board,
           player: currentPlayer, 
-          difficulty: 'expert',
+          difficulty: 'medium',
           session_id: sessionId
         })
       });
