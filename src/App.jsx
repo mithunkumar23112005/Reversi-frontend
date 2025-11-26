@@ -30,6 +30,8 @@ const ReversiGame = () => {
   const [difficulty, setDifficulty] = useState('medium');
   const [thinking, setThinking] = useState(false);
   const [gameMode, setGameMode] = useState('');
+  const [hintLoading, setHintLoading] = useState(false);
+
   const [stats, setStats] = useState({
     nodesExplored: 0,
     timeMs: 0,
@@ -46,6 +48,7 @@ const ReversiGame = () => {
   const [aiHint, setAiHint] = useState(null);
   const [showHint, setShowHint] = useState(false);
   const [showHvHSubMenu, setShowHvHSubMenu] = useState(false);
+  const hintControllerRef = useRef(null);
 
   // --- Online Game State ---
   const [isOnlineReady, setIsOnlineReady] = useState(false);
@@ -240,45 +243,61 @@ const ReversiGame = () => {
 
   // --- GET HINT (Unlimited, All Modes) ---
   const getAIHint = async () => {
-    if (!board || board.length === 0 || thinking) return;
-    
-    // Toggle off if already shown
-    if (showHint) {
-        setShowHint(false);
-        return;
+  // If hint is already loading → cancel it on second click
+  if (hintLoading) {
+    if (hintControllerRef.current) {
+      hintControllerRef.current.abort();  // 🔥 Stop request
     }
+    setHintLoading(false);
+    setShowHint(false);
+    setAiHint(null);
+    return;
+  }
 
-    setThinking(true);
-    setShowStats(true);
-    try {
-      const response = await fetch(`${API_URL}/api/ai_move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          board: board,
-          player: currentPlayer, 
-          difficulty: 'medium',
-          session_id: sessionId
-        })
+  // Normal Hint Start
+  const controller = new AbortController();
+  hintControllerRef.current = controller;
+
+  setHintLoading(true);
+  setShowStats(true);
+
+  try {
+    const response = await fetch(`${API_URL}/api/ai_move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal, // 🔥 enables cancellation
+      body: JSON.stringify({
+        board: board,
+        player: currentPlayer,
+        difficulty: 'hint', // 🔥 use fast depth
+        session_id: sessionId
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      setAiHint(data.move);
+      setShowHint(true);
+      setStats({
+        nodesExplored: data.stats.nodes_explored,
+        timeMs: data.stats.time_ms,
+        depthReached: data.stats.depth_reached,
+        pruningRate: data.stats.pruning_rate,
+        ttHits: data.stats.tt_hits
       });
-      const data = await response.json();
-      if (data.success) {
-        setAiHint(data.move);
-        setShowHint(true);
-        setStats({
-          nodesExplored: data.stats.nodes_explored,
-          timeMs: data.stats.time_ms,
-          depthReached: data.stats.depth_reached,
-          pruningRate: data.stats.pruning_rate,
-          ttHits: data.stats.tt_hits
-        });
-      }
-      setThinking(false);
-    } catch (error) {
-      console.error('Error getting hint:', error);
-      setThinking(false);
     }
-  };
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.log("Hint request cancelled.");
+    } else {
+      console.error("Hint error:", err);
+    }
+  }
+
+  setHintLoading(false);
+};
+
   
   const startGame = async (mode) => {
     setGameMode(mode);
@@ -829,18 +848,22 @@ const ReversiGame = () => {
               (gameMode === 'online' && currentPlayer === onlinePlayerColor)
             ) && (
               <button 
-                onClick={getAIHint} 
-                disabled={thinking} 
-                className={`
-                  p-2 rounded-lg transition-all flex items-center gap-2 border-2
-                  ${showHint 
-                    ? 'bg-yellow-500/20 border-yellow-400 text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
-                    : 'bg-gray-700 border-gray-600 text-gray-300 hover:text-white hover:border-gray-500'}
-                `}
-                title="Get AI Best Move Hint"
-              >
-                <Lightbulb size={24} fill={showHint ? "currentColor" : "none"} /> 
-              </button>
+  onClick={getAIHint} 
+  disabled={thinking || hintLoading} 
+  className={`
+    p-2 rounded-lg transition-all flex items-center gap-2 border-2
+    ${showHint 
+      ? 'bg-yellow-500/20 border-yellow-400 text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
+      : 'bg-gray-700 border-gray-600 text-gray-300 hover:text-white hover:border-gray-500'}
+  `}
+>
+  {hintLoading ? (
+    <div className="animate-spin h-6 w-6 border-2 border-yellow-400 border-t-transparent rounded-full"></div>
+  ) : (
+    <Lightbulb size={24} fill={showHint ? "currentColor" : "none"} />
+  )}
+</button>
+
             )}
 
             <button onClick={() => initializeGame(boardSize, gameMode)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all flex items-center gap-2"><RotateCcw size={18} /> Reset</button>
