@@ -4,8 +4,8 @@ import io from 'socket.io-client';
 import logo from "./logo.png";
 
 
-const API_URL = 'https://reversi-kb0q.onrender.com';
-const SOCKET_URL = 'https://reversi-kb0q.onrender.com';
+const API_URL = 'https://mithun23112005-reversi.hf.space/';
+const SOCKET_URL = 'https://mithun23112005-reversi.hf.space/';
 let socket;
 
 import BoardEditor from "./components/BoardEditor";
